@@ -361,7 +361,7 @@ def build_ar_children_catalog_per_year_era5(
     algo_children_tag="Buffet_children",
     lat_band=(-90.0, -15.0),
     time_chunks=96,
-    min_area_km2=20000.0,
+    min_area_km2=200000.0,
     apply_area_filter=True,
     require_parent_born_outside=False,
     outside_criterion="either",   # "lsm" | "lat" | "either" | "both"
@@ -531,7 +531,7 @@ build_ar_children_catalog_per_year_era5(
     out_dir="/Users/buffetv/artmip_out/era5",
     dataset_tag="ERA5", algo_children_tag="Buffet_children_IVT",
     lat_band=(-90,-15), time_chunks=96,
-    min_area_km2=20000.0, apply_area_filter=True,
+    min_area_km2=200000.0, apply_area_filter=True,
     require_parent_born_outside=False, outside_criterion="either", outside_lat=-65.0,
     lsm_positive_threshold=0.0
 )

@@ -98,11 +98,11 @@ children:
   land_mask_threshold: 0
 ~~~
 
-For CCUB/SGE, add:
+For an SGE cluster, add a site-specific launcher block:
 
 ~~~yaml
 launcher:
-  python: /user1/crct/USER/.conda/envs/enar_dev/bin/python
+  python: /path/to/your/environment/bin/python
   environment_setup: |
     export OMP_NUM_THREADS=1
     export MKL_NUM_THREADS=1

@@ -19,7 +19,7 @@ percentile:
   quantile: 0.98
   window_days: 15
 dark:
-  min_area_km2: 20000
+  min_area_km2: 200000
   min_length_km: 2000
 children:
   enabled: false

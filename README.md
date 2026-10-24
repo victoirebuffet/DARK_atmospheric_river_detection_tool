@@ -1,143 +1,258 @@
-# DARK portable
+# DARK atmospheric-river detection tool
 
-`dark.py` replaces the dataset-specific ERA5/MERRA-2 launch scripts with one
-configuration. It writes a rolling day-of-year IVT percentile file and then
-per-year NetCDF DARK tags. Set `children.enabled: true` to produce `ar_type`
-in the same pass: `0` is neither, `1` is a DARK parent and `2` is a child.
+Configuration-driven DARK and DARK + children detection for ERA5, MERRA2,
+CESM and compatible rectilinear latitude/longitude datasets.
 
-## Install
+[Quick start](#quick-start) · [Examples](#examples) · [Thresholds](#thresholds) · [Parallel execution](#parallel-execution) · [Outputs](#outputs)
 
-```bash
-git clone YOUR_DARK_REPOSITORY
-cd YOUR_DARK_REPOSITORY
+---
+
+## Quick start
+
+~~~bash
+git clone https://github.com/victoirebuffet/DARK_atmospheric_river_detection_tool.git
+cd DARK_atmospheric_river_detection_tool
 python -m pip install -r dark/requirements.txt
-```
 
-## Threshold reference period and adaptive option
+cp dark/example_merra2.yml my_dark_run.yml
+python dark/dark.py my_dark_run.yml --validate-config
+python dark/submit.py my_dark_run.yml --scheduler sge --dry-run
+~~~
 
-`years` is the detection period. By default it is also the percentile
-reference period; set `percentile.reference_years: [START, END]` to build the
-rolling climatology from only part of the available record. These years may be
-outside the detection period as long as their input files are available.
+> [!TIP]
+> All scientific choices are in one YAML or JSON configuration: files,
+> variables, region, percentile, reference period and children. Scheduler
+> choices are also configurable and never hard-coded in DARK.
 
-An optional `adaptive_threshold` multiplies the percentile threshold by a
-smoothed annual driver factor, reproducing the principle of the older tool:
+## At a glance
 
-```yaml
+| Capability | Supported |
+| --- | --- |
+| IVT input | Scalar IVT, or vector components u + v |
+| Data layout | One file/year, separate component files, or multi-year files |
+| Geography | Northern Hemisphere, Southern Hemisphere, global or regional |
+| Longitude | 0–360°, −180–180°, including seam-crossing regional domains |
+| Threshold | Rolling percentile and optional adaptive multiplier |
+| Execution | Local machine, SGE, Slurm or PBS |
+
+## Examples
+
+<details open>
+<summary><strong>Scalar IVT — MERRA2 or model output</strong></summary>
+
+~~~yaml
+dataset: MERRA2
+output_dir: /work/USER/DARK/merra2_q85
+years: [1980, 2023]
+data:
+  ivt_type: scalar
+  file_pattern: /data/ARTMIP_MERRA_2D_{year}_3h.nc
+  ivt_variable: IVT
+  region:
+    latitude: [-90, -15]
+    longitude: [0, 360]
+percentile:
+  quantile: 0.85
+  window_days: 15
+  reference_years: [1980, 2023]
+dark:
+  min_area_km2: 200000
+  min_length_km: 2000
+children:
+  enabled: false
+~~~
+
+~~~bash
+python dark/dark.py my_dark_run.yml
+~~~
+
+</details>
+
+<details>
+<summary><strong>Vector IVT — ERA5 with DARK + children</strong></summary>
+
+~~~yaml
+dataset: ERA5
+output_dir: /work/USER/DARK/era5_q98
+years: [1979, 2025]
+data:
+  ivt_type: vector
+  u_file_pattern: /data/vertical_integral_of_eastward_water_vapour_flux_{year}.nc
+  v_file_pattern: /data/vertical_integral_of_northward_water_vapour_flux_{year}.nc
+  u_variable: viwve
+  v_variable: viwvn
+  periodic_longitude: auto
+  region:
+    latitude: [-90, -15]
+    longitude: [0, 360]
+percentile:
+  quantile: 0.98
+  window_days: 15
+dark:
+  min_area_km2: 200000
+  min_length_km: 2000
+children:
+  enabled: true
+  land_mask_file: /data/land_sea_mask.nc
+  land_mask_variable: lsm
+  land_mask_threshold: 0
+~~~
+
+For CCUB/SGE, add:
+
+~~~yaml
+launcher:
+  python: /user1/crct/USER/.conda/envs/enar_dev/bin/python
+  environment_setup: |
+    export OMP_NUM_THREADS=1
+    export MKL_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+  submit_options:
+    sge: ["-cwd", "-V", "-q", "batch"]
+~~~
+
+</details>
+
+<details>
+<summary><strong>Multi-year files — CESM-style input</strong></summary>
+
+~~~yaml
+dataset: CESM2-LE
+output_dir: /work/USER/DARK/cesm2_member001
+years: [1990, 2009]
+data:
+  ivt_type: scalar
+  files:
+    - /data/member001.IVT.1990010100-1999123100.nc
+    - /data/member001.IVT.2000010100-2009123100.nc
+  ivt_variable: IVT
+  region:
+    latitude: [20, 90]
+    longitude: [-180, 180]
+percentile: {quantile: 0.98, window_days: 15}
+dark: {min_area_km2: 200000, min_length_km: 2000}
+children: {enabled: false}
+~~~
+
+</details>
+
+<details>
+<summary><strong>Non-standard coordinate/dimension names</strong></summary>
+
+~~~yaml
+data:
+  coordinates: {time: valid_time, lat: latitude, lon: longitude}
+  dimensions: {time: valid_time, lat: y, lon: x}
+~~~
+
+</details>
+
+Ready-to-copy files: [ERA5](dark/example_era5.yml),
+[MERRA2](dark/example_merra2.yml), and [CESM2](dark/example_cesm2.yml).
+
+## Thresholds
+
+<details open>
+<summary><strong>Reference period</strong></summary>
+
+By default all detection years are used to calculate percentiles. To tag
+2000–2025 against a 1981–2010 baseline:
+
+~~~yaml
+years: [2000, 2025]
+percentile:
+  quantile: 0.98
+  window_days: 15
+  reference_years: [1981, 2010]
+~~~
+
+</details>
+
+<details>
+<summary><strong>Adaptive threshold</strong></summary>
+
+The annual mean driver is smoothed and its ratio to the reference-period mean
+multiplies the percentile threshold:
+
+~~~yaml
 adaptive_threshold:
   enabled: true
   smoothing_sigma_years: 2
   data:
     file_pattern: /data/total_column_water_vapor_{year}.nc
     variable: tcwv
-```
+  region:
+    latitude: [-90, -60]
+    longitude: [0, 360]
+~~~
 
-The driver defaults to the detection region, but `adaptive_threshold.region`
-can override it. Its factor is its smoothed annual mean divided by the mean
-over `percentile.reference_years`; values above one raise the threshold. The
-saved `adaptive_threshold_factors.nc` records the annual means and factors.
+The output file <code>adaptive_threshold_factors.nc</code> stores the annual
+mean, smoothed mean and applied factor.
 
-```bash
-python dark/dark.py my_run.yml
-python dark/dark.py my_run.yml --build-percentiles-only
-```
+</details>
 
-Set `data.ivt_type` explicitly: `scalar` means a direct IVT magnitude
-(`file_pattern` + `ivt_variable`, e.g. MERRA-2 or a model); `vector` computes
-the magnitude from `u` and `v`, either in one `file_pattern` or in separate
-`u_file_pattern`/`v_file_pattern` files (ERA5). Coordinates `latitude`/`longitude`/`valid_time` are
-normalised automatically; `data.region` crops any latitude/longitude domain.
-For a quick validation without processing an entire year, add
-`data.time_slice: ["2000-01-01", "2000-01-05T23:59:59"]`.
-For CESM and other inputs split into multi-year chunks, use `data.files` with
-an explicit list: the relevant year is selected from the combined files and
-CF/cftime calendars are preserved. See `example_cesm2.yml`.
-The coordinate variables and dimensions are configurable for rectilinear
-latitude/longitude model output:
+## Geographic domain
 
-```yaml
-data:
-  coordinates: {time: valid_time, lat: latitude, lon: longitude}
-  dimensions: {time: valid_time, lat: latitude, lon: longitude}
-  periodic_longitude: auto       # default; inferred from global longitude coverage
-```
+| Option | Behaviour |
+| --- | --- |
+| <code>periodic_longitude: auto</code> | Default. Wrap only a truly global grid. |
+| <code>periodic_longitude: false</code> | Never join across the left/right domain edge. |
+| Regional domain crossing 0° | Remains non-periodic if it has a longitude gap. |
+| <code>data.region.latitude: [20, 90]</code> | Northern Hemisphere example. |
+| <code>data.region.latitude: [-90, -15]</code> | Southern Hemisphere example. |
 
-With `auto` (the default), periodicity is enabled only for grids spanning
-approximately 0–360° or −180–180°; it is off for a limited-area domain.
-Set it explicitly to `true` or `false` only to override that inference.
-Components then do not join across the left and right edges of a regional
-grid. The detector works in either hemisphere; choose the
-latitude interval in `data.region` (or omit it for the full globe).
+The detector currently requires a 1-D rectilinear latitude/longitude grid.
+MAR projected x/y grids need a dedicated projection-aware adapter and a
+validation catalogue before support is added.
 
-At present `data.grid: latlon` is deliberately required: the centreline and
-cell-area calculations require one-dimensional geographic latitude/longitude.
-MAR-style projected x/y grids need a separate adapter based on their map
-projection or 2-D geographic auxiliary coordinates. That adapter should be
-validated against a MAR reference catalogue before it is advertised as a
-supported input, rather than silently treating kilometres as degrees.
-When children are enabled, each annual children job warms its continuity state
-by replaying the preceding annual parent artifact; it does not wait for the
-preceding children job.
+## Parallel execution
 
-Use the supplied `example_era5.yml` as a template. The only optional runtime
-dependency is `PyYAML` for YAML; JSON works with the standard library.
+~~~text
+percentiles
+     │
+     ├── DARK 2000 ──┬── children 2000
+     ├── DARK 2001 ──┼── children 2001  (waits for DARK 2000 + 2001)
+     └── DARK 2002 ─┴── children 2002  (waits for DARK 2001 + 2002)
+~~~
 
-`example_merra2.yml` is the direct-IVT variant and `example_cesm2.yml` shows
-multi-year model files. The `compatibility_profile` setting is only for
-reproducing a historical catalogue; omit it for a new scientific run.
+All DARK years run in parallel. Children years also run in parallel: each
+waits only for parent artifacts from the current and previous years.
 
-Before allocating compute time, check only the configuration (no data are
-opened):
+~~~bash
+python dark/submit.py my_dark_run.yml --scheduler sge --dry-run
+python dark/submit.py my_dark_run.yml --scheduler sge
+python dark/submit.py my_dark_run.yml --scheduler slurm
+python dark/submit.py my_dark_run.yml --scheduler pbs
+python dark/submit.py my_dark_run.yml --scheduler local
+~~~
 
-```bash
-python dark/dark.py my_run.yml --validate-config
-```
+## Outputs
 
-## Parallel DARK, continuous children
+| File | Contents |
+| --- | --- |
+| <code>OUTPUT/percentiles.nc</code> | Rolling IVT percentile climatology |
+| <code>OUTPUT/adaptive_threshold_factors.nc</code> | Optional adaptive factors |
+| <code>OUTPUT/DATASET.DARK.YEAR.nc</code> | Final annual catalogue |
+| <code>OUTPUT/.dark-work/YEAR.nc</code> | Temporary parent/exceedance file, only with children |
+| <code>OUTPUT/.dark-submit/</code> | Generated scheduler scripts |
 
-For any scheduler, use the two portable stages below rather than embedding
-scientific logic in a submission script:
+| Variable | Meaning |
+| --- | --- |
+| <code>ar_binary_tag</code> | 1 = DARK parent or child; 0 = no AR |
+| <code>ar_type</code> | With children: 0 = none, 1 = parent, 2 = child |
 
-```bash
-# Run once, then make every dark-year job depend on this completed file.
-python dark/pipeline.py build-percentiles run.yml
+## Validate before computing
 
-# Can run immediately for every year, in parallel.
-python dark/pipeline.py dark-year run.yml 2001
+~~~bash
+python dark/dark.py my_dark_run.yml --validate-config
+~~~
 
-# Wait only for DARK 2001 and DARK 2000; it replays 2000 to initialize
-# temporal continuity, then writes children for 2001.
-python dark/pipeline.py children-year run.yml 2001 \
-  --previous-parent OUTPUT/.dark-work/2000.nc
-```
+## Requirements
 
-`dark-year` writes `OUTPUT/.dark-work/YEAR.nc`, containing the parent mask and
-the filtered IVT exceedance. Each `children-year` writes its final annual
-catalog independently as soon as its current and previous artifacts exist.
-The first children year has no `--previous-parent` and starts independently.
-Parent artifacts remain until the complete workflow is finished, because they
-can be read by the next year's children job. This contract works unchanged for
-local jobs, SGE, Slurm, PBS, or a workflow tool: only their dependency syntax
-differs.
+Python 3.10+ with:
 
-## One-command launch on common systems
+~~~text
+numpy  xarray  netCDF4  scipy  scikit-image  geopy  networkx  PyYAML
+~~~
 
-`submit.py` generates the small per-stage scripts and wires the appropriate
-dependencies for you. It never embeds a cluster path or module name: place
-machine-specific details in the optional `launcher` block of the config.
-
-```bash
-# Always inspect the generated dependency graph first.
-python dark/submit.py my_run.yml --scheduler sge --dry-run
-
-# Then submit it, or use slurm / pbs / local instead.
-python dark/submit.py my_run.yml --scheduler sge
-python dark/submit.py my_run.yml --scheduler slurm
-python dark/submit.py my_run.yml --scheduler pbs
-python dark/submit.py my_run.yml --scheduler local
-```
-
-The graph is deliberately the same everywhere: percentiles → all annual DARK
-jobs in parallel → children year *Y* after DARK year *Y* and *Y − 1* (also in
-parallel). Generated scripts live under `OUTPUT/.dark-submit/`, while
-temporary parent/exceedance files live under `OUTPUT/.dark-work/`.
+Install with <code>python -m pip install -r dark/requirements.txt</code>.

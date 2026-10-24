@@ -36,6 +36,10 @@ children:
   land_mask_file: /data/land_sea_mask.nc
   land_mask_variable: lsm
   land_mask_threshold: 0
+  # If the land mask has different coordinate/dimension names or resolution:
+  # land_mask_data:
+  #   coordinates: {lat: latitude, lon: longitude}
+  #   dimensions: {lat: latitude, lon: longitude}
 # Optional adaptive multiplier, following the legacy smoothed annual-humidity
 # approach. The factor is 1 on average over `reference_years`.
 # adaptive_threshold:

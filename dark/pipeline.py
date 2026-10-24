@@ -86,8 +86,7 @@ def children_year(cfg: dict, year: int, previous_parent: Path | None) -> Path:
     child_cfg = cfg.get("children", {})
     if not child_cfg.get("enabled"): raise ValueError("children.enabled must be true for children-year")
     artifact = xr.open_dataset(intermediate)
-    land_ds = dark._region(dark._normalise(xr.open_dataset(child_cfg["land_mask_file"]), cfg["data"], require_time=False), cfg["data"])
-    land = land_ds[child_cfg["land_mask_variable"]].sel(lat=artifact.lat, lon=artifact.lon).values > float(child_cfg.get("land_mask_threshold", 0))
+    land = dark.open_land_mask(cfg, artifact.lat, artifact.lon)
     periodic = dark.periodic_longitude(cfg["data"], artifact.lon.values)
     tracker = _warm_tracker(previous_parent, land, periodic) if previous_parent else dark.ChildrenTracker(land, periodic)
     parent = artifact.dark_parent.values.astype(bool); kids = np.zeros_like(parent, dtype=np.int8)
@@ -100,7 +99,6 @@ def children_year(cfg: dict, year: int, previous_parent: Path | None) -> Path:
         attrs={"scheme": "DARK", "children_definition": "0=none, 1=parent, 2=child"},
     ).to_netcdf(output, encoding={"ar_binary_tag": {"zlib": True, "complevel": 1}, "ar_type": {"zlib": True, "complevel": 1}})
     artifact.close()
-    land_ds.close()
     # Artifacts must remain available while the next year may still be
     # warming from them. They can be removed after the complete workflow.
     return output

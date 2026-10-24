@@ -37,6 +37,10 @@ python dark/submit.py my_dark_run.yml --scheduler sge --dry-run
 
 ## Examples
 
+Every configuration follows the same top-level layout: <code>data</code>,
+<code>percentile</code>, <code>dark</code>, then <code>children</code>.
+Only the IVT input declaration inside <code>data</code> changes by dataset.
+
 <details open>
 <summary><strong>Scalar IVT — MERRA2 or model output</strong></summary>
 
@@ -48,6 +52,10 @@ data:
   ivt_type: scalar
   file_pattern: /data/ARTMIP_MERRA_2D_{year}_3h.nc
   ivt_variable: IVT
+  periodic_longitude: auto
+  # Optional only for non-standard coordinate/dimension names:
+  # coordinates: {time: time, lat: lat, lon: lon}
+  # dimensions: {time: time, lat: lat, lon: lon}
   region:
     latitude: [-90, -15]
     longitude: [0, 360]
@@ -82,6 +90,9 @@ data:
   u_variable: viwve
   v_variable: viwvn
   periodic_longitude: auto
+  # Optional only for non-standard coordinate/dimension names:
+  # coordinates: {time: time, lat: latitude, lon: longitude}
+  # dimensions: {time: time, lat: latitude, lon: longitude}
   region:
     latitude: [-90, -15]
     longitude: [0, 360]
@@ -122,16 +133,40 @@ output_dir: /work/USER/DARK/cesm2_member001
 years: [1990, 2009]
 data:
   ivt_type: scalar
-  files:
-    - /data/member001.IVT.1990010100-1999123100.nc
-    - /data/member001.IVT.2000010100-2009123100.nc
+  member: member001
+  file_glob: /data/{member}.IVT.*.nc
   ivt_variable: IVT
+  periodic_longitude: auto
+  # Optional only for non-standard coordinate/dimension names:
+  # coordinates: {time: time, lat: lat, lon: lon}
+  # dimensions: {time: time, lat: lat, lon: lon}
   region:
     latitude: [20, 90]
     longitude: [-180, 180]
 percentile: {quantile: 0.98, window_days: 15}
 dark: {min_area_km2: 200000, min_length_km: 2000}
 children: {enabled: false}
+~~~
+
+</details>
+
+<details>
+<summary><strong>Children land mask — required for every dataset when enabled</strong></summary>
+
+Whether the IVT comes from ERA5, MERRA2, CESM or another model, enabling
+children requires a land mask. It may have a different resolution: it is
+aligned to the IVT grid with nearest-neighbour interpolation.
+
+~~~yaml
+children:
+  enabled: true
+  land_mask_file: /data/land_mask.nc
+  land_mask_variable: lsm
+  land_mask_threshold: 0
+  # Optional only if this file uses different coordinate/dimension names:
+  land_mask_data:
+    coordinates: {lat: latitude, lon: longitude}
+    dimensions: {lat: latitude, lon: longitude}
 ~~~
 
 </details>

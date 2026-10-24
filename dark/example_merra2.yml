@@ -7,6 +7,10 @@ data:
   file_pattern: /data/ARTMIP_MERRA_2D_{year}_3h.nc
   ivt_variable: IVT
   longitude_domain: native
+  periodic_longitude: auto
+  # Optional only when coordinate/dimension names are non-standard:
+  # coordinates: {time: time, lat: lat, lon: lon}
+  # dimensions: {time: time, lat: lat, lon: lon}
   region:
     latitude: [-90, -15]
     longitude: [0, 360]
@@ -19,3 +23,6 @@ dark:
   compatibility_profile: merra2_legacy  # Remove for a new, generic run.
 children:
   enabled: false
+  # If enabled, these are required for every model:
+  # land_mask_file: /data/land_mask.nc
+  # land_mask_variable: lsm

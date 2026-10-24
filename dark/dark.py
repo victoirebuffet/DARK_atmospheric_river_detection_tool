@@ -8,6 +8,7 @@ components.  The implementation deliberately has no dataset-specific paths.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,8 +49,8 @@ def validate_config(cfg: dict[str, Any]) -> None:
     kind = data.get("ivt_type")
     if kind not in {"scalar", "vector"}:
         raise ValueError("data.ivt_type must be 'scalar' or 'vector'.")
-    if not any(data.get(key) for key in ("file_pattern", "files", "u_file_pattern")):
-        raise ValueError("data needs file_pattern, files, or u_file_pattern/v_file_pattern.")
+    if not any(data.get(key) for key in ("file_pattern", "files", "file_glob", "u_file_pattern")):
+        raise ValueError("data needs file_pattern, files, file_glob, or u_file_pattern/v_file_pattern.")
     if kind == "scalar" and not data.get("ivt_variable"):
         raise ValueError("Scalar IVT needs data.ivt_variable.")
     if kind == "vector" and not (data.get("u_variable") and data.get("v_variable")):
@@ -146,8 +147,12 @@ def _open_ivt(year: int, cfg: dict[str, Any]) -> xr.DataArray:
     # CESM-style output is commonly split in decade/multi-year files rather
     # than one file per year.  `files` is therefore an explicit list of such
     # files; only the requested year is retained after combining them.
-    if data.get("files"):
-        paths = [str(p).format(**values) for p in data["files"]]
+    if data.get("files") or data.get("file_glob"):
+        paths = [str(p).format(**values) for p in data.get("files", [])]
+        if data.get("file_glob"):
+            paths.extend(sorted(glob.glob(data["file_glob"].format(**values))))
+        if not paths:
+            raise FileNotFoundError("data.file_glob did not match any input file.")
         ds = _region(_normalise(xr.open_mfdataset(paths, combine="by_coords"), data), data)
         ds = ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31T23:59:59"))
         if not ds.sizes.get("time", 0):
@@ -435,6 +440,23 @@ class ChildrenTracker:
         return children
 
 
+def open_land_mask(cfg: dict[str, Any], lat: xr.DataArray, lon: xr.DataArray) -> np.ndarray:
+    """Open a children land mask and align it to the IVT grid.
+
+    The land mask may use different coordinate/dimension names and resolution;
+    nearest-neighbour interpolation is used only when its grid differs.
+    """
+    children = cfg["children"]
+    mask_cfg = dict(cfg["data"])
+    mask_cfg.update(children.get("land_mask_data", {}))
+    mask_cfg["region"] = cfg["data"].get("region")
+    with xr.open_dataset(children["land_mask_file"]) as raw:
+        mask = _region(_normalise(raw, mask_cfg, require_time=False), mask_cfg)[children["land_mask_variable"]].load()
+    if not (np.array_equal(mask.lat.values, lat.values) and np.array_equal(mask.lon.values, lon.values)):
+        mask = mask.interp(lat=lat, lon=lon, method="nearest")
+    return mask.values > float(children.get("land_mask_threshold", 0))
+
+
 def run(cfg: dict[str, Any]) -> list[Path]:
     out_dir = Path(cfg["output_dir"]); out_dir.mkdir(parents=True, exist_ok=True)
     pctl = open_percentile(cfg.get("percentile_file") or build_percentiles(cfg))
@@ -442,13 +464,11 @@ def run(cfg: dict[str, Any]) -> list[Path]:
     children_cfg = cfg.get("children", {"enabled": False})
     tracker = None
     outputs = []
-    if children_cfg.get("enabled"):
-        mask = _region(_normalise(xr.open_dataset(children_cfg["land_mask_file"]), cfg["data"], require_time=False), cfg["data"])[children_cfg["land_mask_variable"]]
     for year in range(int(cfg["years"][0]), int(cfg["years"][1]) + 1):
         ivt = _open_ivt(year, cfg); threshold = pctl.sel(dayofyear=_canonical_doy(ivt.time)) * adaptive_factor(cfg, year)
         area = _area(ivt.lat.values, ivt.lon.values, cfg["dark"].get("compatibility_profile") in {"merra2_legacy", "era5_sensitivity"})
         if children_cfg.get("enabled") and tracker is None:
-            tracker = ChildrenTracker(mask.sel(lat=ivt.lat, lon=ivt.lon).values > float(children_cfg.get("land_mask_threshold", 0)), periodic_longitude(cfg["data"], ivt.lon.values))
+            tracker = ChildrenTracker(open_land_mask(cfg, ivt.lat, ivt.lon), periodic_longitude(cfg["data"], ivt.lon.values))
         parents = np.zeros(ivt.shape, dtype=np.int8); kids = np.zeros(ivt.shape, dtype=np.int8)
         for t in range(ivt.sizes["time"]):
             exceed = (ivt.isel(time=t).values > threshold.isel(time=t).values)

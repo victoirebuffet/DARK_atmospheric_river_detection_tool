@@ -404,10 +404,20 @@ def build_percentiles(cfg: dict[str, Any]) -> Path:
         # when a short test/model experiment does not cover every calendar day.
         value = sample.quantile(cfg["percentile"]["quantile"], dim="time") if sample.sizes["time"] else xr.full_like(all_ivt.isel(time=0, drop=True), np.nan)
         parts.append(value.assign_coords(dayofyear=day).expand_dims("dayofyear"))
-    out = Path(cfg["output_dir"]) / "percentiles.nc"; out.parent.mkdir(parents=True, exist_ok=True)
+    out = percentile_path(cfg); out.parent.mkdir(parents=True, exist_ok=True)
     xr.concat(parts, "dayofyear").rename("ivt_percentile").to_netcdf(out, encoding={"ivt_percentile": {"zlib": True, "complevel": 1}})
     build_adaptive_factors(cfg)
     return out
+
+
+def percentile_path(cfg: dict[str, Any]) -> Path:
+    """Return the configured or descriptive default percentile filename."""
+    if cfg.get("percentile_file"):
+        return Path(cfg["percentile_file"])
+    dataset = "".join(char if char.isalnum() or char in "._-" else "_" for char in str(cfg["dataset"]))
+    quantile = float(cfg["percentile"]["quantile"])
+    label = f"q{quantile * 100:g}".replace(".", "p")
+    return Path(cfg["output_dir"]) / f"{dataset}.percentile.{label}.nc"
 
 
 @dataclass

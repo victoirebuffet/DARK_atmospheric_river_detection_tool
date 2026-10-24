@@ -23,7 +23,7 @@ def _paths(cfg, year: int) -> tuple[Path, Path]:
 
 
 def _percentiles(cfg) -> xr.DataArray:
-    path = Path(cfg.get("percentile_file") or Path(cfg["output_dir"]) / "percentiles.nc")
+    path = dark.percentile_path(cfg)
     if not path.exists():
         raise FileNotFoundError(f"Percentile file is missing: {path}. Run 'build-percentiles' once before dark-year jobs.")
     return dark.open_percentile(path)

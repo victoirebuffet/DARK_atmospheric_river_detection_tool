@@ -143,9 +143,14 @@ data:
   region:
     latitude: [20, 90]
     longitude: [-180, 180]
-percentile: {quantile: 0.98, window_days: 15}
-dark: {min_area_km2: 200000, min_length_km: 2000}
-children: {enabled: false}
+percentile:
+  quantile: 0.98
+  window_days: 15
+dark:
+  min_area_km2: 200000
+  min_length_km: 2000
+children:
+  enabled: false
 ~~~
 
 </details>
@@ -265,7 +270,7 @@ python dark/submit.py my_dark_run.yml --scheduler local
 
 | File | Contents |
 | --- | --- |
-| <code>OUTPUT/percentiles.nc</code> | Rolling IVT percentile climatology |
+| <code>OUTPUT/DATASET.percentile.q98.nc</code> | Rolling IVT percentile climatology (the default name includes dataset and percentile) |
 | <code>OUTPUT/adaptive_threshold_factors.nc</code> | Optional adaptive factors |
 | <code>OUTPUT/DATASET.DARK.YEAR.nc</code> | Final annual catalogue |
 | <code>OUTPUT/.dark-work/YEAR.nc</code> | Temporary parent/exceedance file, only with children |

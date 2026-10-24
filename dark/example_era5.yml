@@ -29,13 +29,14 @@ percentile:
   # Optional: defaults to `years`; may be a subset of the available dataset.
   reference_years: [1979, 2025]
 dark:
-  min_area_km2: 20000
+  min_area_km2: 200000
   min_length_km: 2000
 children:
   enabled: true
+  land_only: true  # false: children can occur over land and ocean; no mask needed.
   land_mask_file: /data/land_sea_mask.nc
   land_mask_variable: lsm
-  land_mask_threshold: 0
+  # Must contain only False/True, 0/1, or NaN/1.
   # If the land mask has different coordinate/dimension names or resolution:
   # land_mask_data:
   #   coordinates: {lat: latitude, lon: longitude}

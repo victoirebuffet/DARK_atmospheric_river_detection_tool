@@ -23,6 +23,8 @@ dark:
   compatibility_profile: merra2_legacy  # Remove for a new, generic run.
 children:
   enabled: false
-  # If enabled, these are required for every model:
+  # If enabled with land_only: true, choose one mask source:
+  # land_only: true
   # land_mask_file: /data/land_mask.nc
   # land_mask_variable: lsm
+  # Or: land_mask_source: global_land_mask

@@ -104,9 +104,10 @@ dark:
   min_length_km: 2000
 children:
   enabled: true
+  land_only: true
   land_mask_file: /data/land_sea_mask.nc
   land_mask_variable: lsm
-  land_mask_threshold: 0
+  # lsm must be False/True, 0/1, or NaN/1.
 ~~~
 
 For an SGE cluster, add a site-specific launcher block:
@@ -156,22 +157,37 @@ children:
 </details>
 
 <details>
-<summary><strong>Children land mask — required for every dataset when enabled</strong></summary>
+<summary><strong>Children surface mode — land only or all surfaces</strong></summary>
 
-Whether the IVT comes from ERA5, MERRA2, CESM or another model, enabling
-children requires a land mask. It may have a different resolution: it is
-aligned to the IVT grid with nearest-neighbour interpolation.
+By default, `land_only: true`: an AR becomes a child only if its connected
+exceedance reaches land. This needs a binary land-mask variable. It can be
+`False/True`, `0/1`, or `NaN/1`; other values are rejected deliberately.
+The file may use another rectilinear grid and is aligned to the IVT grid with
+nearest-neighbour interpolation.
 
 ~~~yaml
 children:
   enabled: true
+  land_only: true
   land_mask_file: /data/land_mask.nc
   land_mask_variable: lsm
-  land_mask_threshold: 0
+  # lsm must be False/True, 0/1, or NaN/1.
   # Optional only if this file uses different coordinate/dimension names:
   land_mask_data:
     coordinates: {lat: latitude, lon: longitude}
     dimensions: {lat: latitude, lon: longitude}
+~~~
+
+Alternatively, `land_mask_source: global_land_mask` evaluates the
+`global-land-mask` package directly at each IVT-grid cell; this is useful
+when no suitable mask file exists. For Arctic sea-ice or ocean-impact work,
+choose `land_only: false`: children are then allowed over every grid cell and
+no land-mask file or package is used.
+
+~~~yaml
+children:
+  enabled: true
+  land_only: false  # all surfaces: no land mask required
 ~~~
 
 </details>

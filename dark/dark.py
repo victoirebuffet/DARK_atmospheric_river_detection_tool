@@ -75,8 +75,15 @@ def validate_config(cfg: dict[str, Any]) -> None:
         if float(adaptive.get("smoothing_sigma_years", 2)) < 0:
             raise ValueError("adaptive_threshold.smoothing_sigma_years cannot be negative.")
     children = cfg.get("children", {})
-    if children.get("enabled") and not {"land_mask_file", "land_mask_variable"} <= set(children):
-        raise ValueError("Enabled children need children.land_mask_file and children.land_mask_variable.")
+    if children.get("enabled"):
+        land_only = children.get("land_only", True)
+        if not isinstance(land_only, bool):
+            raise ValueError("children.land_only must be true or false.")
+        source = children.get("land_mask_source", "file")
+        if source not in {"file", "global_land_mask"}:
+            raise ValueError("children.land_mask_source must be 'file' or 'global_land_mask'.")
+        if land_only and source == "file" and not {"land_mask_file", "land_mask_variable"} <= set(children):
+            raise ValueError("Land-only children need children.land_mask_file and children.land_mask_variable, or land_mask_source: global_land_mask.")
 
 
 def _normalise(ds: xr.Dataset, data_cfg: dict[str, Any], require_time: bool = True) -> xr.Dataset:
@@ -451,12 +458,22 @@ class ChildrenTracker:
 
 
 def open_land_mask(cfg: dict[str, Any], lat: xr.DataArray, lon: xr.DataArray) -> np.ndarray:
-    """Open a children land mask and align it to the IVT grid.
+    """Return the eligible surface for children, aligned to the IVT grid.
 
-    The land mask may use different coordinate/dimension names and resolution;
-    nearest-neighbour interpolation is used only when its grid differs.
+    ``land_only: false`` makes every grid cell eligible.  For land-only runs,
+    a binary file mask (False/True, 0/1, or NaN/1) is validated and aligned by
+    nearest neighbour, or ``global_land_mask`` is evaluated on the IVT grid.
     """
     children = cfg["children"]
+    if not children.get("land_only", True):
+        return np.ones((lat.size, lon.size), dtype=bool)
+    if children.get("land_mask_source", "file") == "global_land_mask":
+        try:
+            from global_land_mask import globe
+        except ImportError as exc:
+            raise ImportError("land_mask_source: global_land_mask requires `global-land-mask`; install dark/requirements.txt.") from exc
+        lat2d, lon2d = np.meshgrid(lat.values, lon.values, indexing="ij")
+        return globe.is_land(lat2d, ((lon2d + 180) % 360) - 180)
     mask_cfg = dict(cfg["data"])
     mask_cfg.update(children.get("land_mask_data", {}))
     mask_cfg["region"] = cfg["data"].get("region")
@@ -464,7 +481,13 @@ def open_land_mask(cfg: dict[str, Any], lat: xr.DataArray, lon: xr.DataArray) ->
         mask = _region(_normalise(raw, mask_cfg, require_time=False), mask_cfg)[children["land_mask_variable"]].load()
     if not (np.array_equal(mask.lat.values, lat.values) and np.array_equal(mask.lon.values, lon.values)):
         mask = mask.interp(lat=lat, lon=lon, method="nearest")
-    return mask.values > float(children.get("land_mask_threshold", 0))
+    values = mask.values
+    if values.dtype == bool:
+        return values
+    finite = values[np.isfinite(values)]
+    if not np.all(np.isin(finite, (0, 1))):
+        raise ValueError("children.land_mask_variable must be binary: False/True, 0/1, or NaN/1.")
+    return np.nan_to_num(values, nan=0.0).astype(bool)
 
 
 def run(cfg: dict[str, Any]) -> list[Path]:

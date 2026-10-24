@@ -6,3 +6,4 @@ scikit-image
 geopy
 networkx
 PyYAML
+global-land-mask

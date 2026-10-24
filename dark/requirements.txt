@@ -1,0 +1,8 @@
+numpy
+xarray
+netCDF4
+scipy
+scikit-image
+geopy
+networkx
+PyYAML

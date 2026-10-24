@@ -1,0 +1,25 @@
+# CESM2-LE direct-IVT example. Make one config per member/period, or generate
+# them from this template in a scheduler array.
+dataset: CESM2-LE
+output_dir: /work/crct/USER/DARK/cesm2/LE2-1011.001/HIST
+years: [1990, 2009]
+data:
+  ivt_type: scalar
+  member: LE2-1011.001
+  # Multi-year chunks: unlike ERA5, do not need a {year} in each filename.
+  files:
+    - /data/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h2.IVT.1990010100-1999123100.nc
+    - /data/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h2.IVT.2000010100-2009123100.nc
+  ivt_variable: IVT
+  longitude_domain: native
+  region:
+    latitude: [-90, -15]
+    longitude: [0, 360]
+percentile:
+  quantile: 0.98
+  window_days: 15
+dark:
+  min_area_km2: 20000
+  min_length_km: 2000
+children:
+  enabled: false

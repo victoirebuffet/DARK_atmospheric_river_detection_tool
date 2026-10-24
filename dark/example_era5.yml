@@ -1,0 +1,56 @@
+# Copy this file, adjust paths and names, then run: python dark/dark.py my_run.yml
+dataset: ERA5
+output_dir: /work/crct/USER/DARK/era5_q98
+years: [1979, 2025]
+data:
+  # Required: scalar = IVT magnitude; vector = calculate magnitude from u/v.
+  ivt_type: vector
+  # Alternative A: one IVT file per year (MERRA-2/model data)
+  # file_pattern: /data/ARTMIP_MERRA_2D_{year}_3h.nc
+  # ivt_type: scalar
+  # ivt_variable: IVT
+  # Alternative B: components in separate ERA5 files
+  u_file_pattern: /data/vertical_integral_of_eastward_water_vapour_flux_{year}.nc
+  v_file_pattern: /data/vertical_integral_of_northward_water_vapour_flux_{year}.nc
+  u_variable: viwve
+  v_variable: viwvn
+  longitude_domain: native       # or -180_180
+  periodic_longitude: auto       # default; true only when the grid closes globally
+  # For non-standard files, map both coordinate variables and dimensions:
+  # coordinates: {time: valid_time, lat: latitude, lon: longitude}
+  # dimensions: {time: valid_time, lat: latitude, lon: longitude}
+  # Optional analysis region; a longitude interval may cross the seam.
+  region:
+    latitude: [-90, -15]
+    longitude: [0, 360]
+percentile:
+  quantile: 0.98
+  window_days: 15
+  # Optional: defaults to `years`; may be a subset of the available dataset.
+  reference_years: [1979, 2025]
+dark:
+  min_area_km2: 20000
+  min_length_km: 2000
+children:
+  enabled: true
+  land_mask_file: /data/land_sea_mask.nc
+  land_mask_variable: lsm
+  land_mask_threshold: 0
+# Optional adaptive multiplier, following the legacy smoothed annual-humidity
+# approach. The factor is 1 on average over `reference_years`.
+# adaptive_threshold:
+#   enabled: true
+#   smoothing_sigma_years: 2
+#   data:
+#     file_pattern: /data/total_column_water_vapor_{year}.nc
+#     variable: tcwv
+launcher:
+  # Optional. Keep this block machine-specific; it does not affect DARK.
+  python: python
+  # environment_setup: |
+  #   module load python
+  # Scheduler options are passed unchanged to every submitted job.
+  submit_options:
+    sge: ["-cwd", "-V", "-q", "batch"]
+    slurm: ["--time=04:00:00", "--cpus-per-task=1"]
+    pbs: []

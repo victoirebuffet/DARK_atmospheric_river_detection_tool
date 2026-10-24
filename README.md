@@ -42,7 +42,7 @@ python dark/submit.py my_dark_run.yml --scheduler sge --dry-run
 
 ~~~yaml
 dataset: MERRA2
-output_dir: /work/USER/DARK/merra2_q85
+output_dir: /work/USER/DARK/merra2_q98
 years: [1980, 2023]
 data:
   ivt_type: scalar
@@ -52,7 +52,7 @@ data:
     latitude: [-90, -15]
     longitude: [0, 360]
 percentile:
-  quantile: 0.85
+  quantile: 0.98
   window_days: 15
   reference_years: [1980, 2023]
 dark:

@@ -1,6 +1,6 @@
 # MERRA-2 / any direct scalar-IVT annual file.
 dataset: MERRA2
-output_dir: /work/crct/USER/DARK/merra2_q85
+output_dir: /work/crct/USER/DARK/merra2_q98
 years: [1980, 2023]
 data:
   ivt_type: scalar
@@ -11,7 +11,7 @@ data:
     latitude: [-90, -15]
     longitude: [0, 360]
 percentile:
-  quantile: 0.85
+  quantile: 0.98
   window_days: 15
 dark:
   min_area_km2: 200000
